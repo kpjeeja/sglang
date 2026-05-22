@@ -230,22 +230,12 @@ class EagleDraftInputV2Mixin:
 
         batch.spec_info = self
         batch.input_ids = predict
+        batch.extend_lens = [num_draft_tokens for _ in range(len(batch.seq_lens))]
         if gpu_only:
             prefix_lens_gpu = batch.seq_lens.to(torch.int32)
-            batch.seq_lens = batch.seq_lens + num_draft_tokens
-            batch.extend_lens = torch.full(
-                (bs,),
-                num_draft_tokens,
-                dtype=torch.int32,
-                device=batch.seq_lens.device,
-            )
             batch.prefix_lens = prefix_lens_gpu
         else:
             seq_lens_cpu_ = batch.seq_lens_cpu
-            batch.seq_lens = batch.seq_lens + num_draft_tokens
-            batch.seq_lens_cpu = batch.seq_lens_cpu + num_draft_tokens
-            batch.seq_lens_sum = int(batch.seq_lens_cpu.sum())
-            batch.extend_lens = [num_draft_tokens for _ in range(bs)]
             batch.prefix_lens = seq_lens_cpu_.tolist()
         batch.extend_num_tokens = extend_num_tokens
         capture_mode = (
@@ -260,6 +250,13 @@ class EagleDraftInputV2Mixin:
         )
         batch.capture_hidden_mode = capture_mode
         forward_batch = ForwardBatch.init_new(batch, draft_model_runner)
+        # Forward sees post-write length (draft extend writes num_draft_tokens
+        # slots); mutation stays on forward_batch to preserve SB.seq_lens.
+        forward_batch.seq_lens = forward_batch.seq_lens + num_draft_tokens
+        if not gpu_only:
+            forward_batch.seq_lens_cpu = forward_batch.seq_lens_cpu + num_draft_tokens
+            forward_batch.seq_lens_sum = int(forward_batch.seq_lens_cpu.sum())
+
         can_cuda_graph = cuda_graph_runner and cuda_graph_runner.can_run(forward_batch)
         if not batch.forward_mode.is_idle() and not can_cuda_graph:
             draft_model_runner.attn_backend.init_forward_metadata(forward_batch)
