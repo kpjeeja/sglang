@@ -95,6 +95,8 @@ jobs:
   # For scheduled runs: wait jobs are skipped, enabling parallel execution for easier retry.
   # For PRs with the `bypass-fastfail` label: wait jobs run but return success immediately
   # (handled inside the wait-for-jobs action), so downstream stages dispatch in parallel.
+  # The same label also flips within-suite continue-on-error in _pr-test-check-changes.yml,
+  # so a single failing file in one suite does not stop the remaining files in that suite.
 
   wait-for-base-a:
     needs: [check-changes, call-gate]

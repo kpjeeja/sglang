@@ -140,10 +140,19 @@ jobs:
 
       - name: Set continue-on-error for schedule/full runs
         id: set-continue-on-error
+        env:
+          BYPASS_FASTFAIL_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'bypass-fastfail') }}
         run: |
-          if [[ "${{ steps.run-mode.outputs.run_all_tests }}" == "true" || "${{ inputs.continue_on_error }}" == "true" ]]; then
+          # `bypass-fastfail` label opts the PR into the same "run all tests"
+          # behavior as scheduled runs: the stage-A→B→C wait jobs already
+          # short-circuit (see actions/wait-for-jobs), and we also flip
+          # within-suite continue-on-error here so a single failing test file
+          # in stage B does not stop the rest of that suite.
+          if [[ "${{ steps.run-mode.outputs.run_all_tests }}" == "true" \
+             || "${{ inputs.continue_on_error }}" == "true" \
+             || "$BYPASS_FASTFAIL_LABEL" == "true" ]]; then
             echo "continue_on_error=true" >> $GITHUB_OUTPUT
-            echo "Continue-on-error: ENABLED (run_all_tests=${{ steps.run-mode.outputs.run_all_tests }}, input=${{ inputs.continue_on_error }})"
+            echo "Continue-on-error: ENABLED (run_all_tests=${{ steps.run-mode.outputs.run_all_tests }}, input=${{ inputs.continue_on_error }}, bypass-fastfail=$BYPASS_FASTFAIL_LABEL)"
           else
             echo "continue_on_error=false" >> $GITHUB_OUTPUT
             echo "Continue-on-error: DISABLED"
