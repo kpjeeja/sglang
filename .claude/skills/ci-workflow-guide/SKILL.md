@@ -135,18 +135,6 @@ This skill covers the CI **infrastructure** layer — how tests are dispatched, 
 - **Layer 3**: `check-pr-test-health` auto-detects `schedule` event and skips; filters out cascade failures to show only root cause jobs
 - **Layer 4**: `wait-for-base-*` jobs are conditioned on `github.event_name == 'pull_request'` — skipped for scheduled runs
 
-### `bypass-fastfail` label
-
-Adding the `bypass-fastfail` label to a PR reproduces scheduled-run "run all tests" behavior on a per-PR basis. It disables layers 2, 3, and 4 in one shot:
-
-| Layer | Effect under `bypass-fastfail` | Where it's wired |
-|-------|--------------------------------|------------------|
-| 2. File → suite | `--continue-on-error` is forced on for the run | `_pr-test-check-changes.yml` (CUDA) and `pr-test-amd.yml` `check-changes` (AMD) |
-| 3. Job → job (same stage) | jobs-failed check is skipped (lint failure still gates) | `actions/check-pr-test-health` |
-| 4. Stage → stage | `wait-for-*` returns success immediately, so all stages dispatch in parallel | `actions/wait-for-jobs` |
-
-Layer 1 (`unittest -f` failfast inside one file) is intentionally still enabled — it surfaces the first failure in a file without affecting other files. Note that layer 3 only applies on CUDA workflows since `pr-test-amd.yml` does not call `check-pr-test-health`; on AMD, the label affects layers 2 and 4 only (which is enough — AMD has no per-stage cross-job fast-fail to begin with).
-
 ---
 
 ## Execution Modes

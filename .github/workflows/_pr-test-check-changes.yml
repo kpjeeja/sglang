@@ -189,19 +189,10 @@ jobs:
 
       - name: Set continue-on-error for full test runs
         id: set-continue-on-error
-        env:
-          BYPASS_FASTFAIL_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'bypass-fastfail') }}
         run: |
-          # `bypass-fastfail` label opts the PR into "run all tests" behavior
-          # across all four fast-fail layers: layers 3-4 are bypassed inside
-          # check-pr-test-health / wait-for-jobs actions; layer 2 (within-suite
-          # file-to-file fast-fail) is bypassed here by enabling
-          # --continue-on-error in run_suite.py.
-          if [[ "${{ steps.run-mode.outputs.run_all_tests }}" == "true" \
-             || "${{ inputs.force_continue_on_error }}" == "true" \
-             || "$BYPASS_FASTFAIL_LABEL" == "true" ]]; then
+          if [[ "${{ steps.run-mode.outputs.run_all_tests }}" == "true" || "${{ inputs.force_continue_on_error }}" == "true" ]]; then
             echo "continue_on_error=true" >> $GITHUB_OUTPUT
-            echo "Full test run, force flag, or bypass-fastfail label detected, enabling continue-on-error to run all tests"
+            echo "Full test run or force flag detected, enabling continue-on-error to run all tests"
           else
             echo "continue_on_error=false" >> $GITHUB_OUTPUT
             echo "Filtered run, continue-on-error disabled"
