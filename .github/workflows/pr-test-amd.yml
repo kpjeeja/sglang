@@ -140,19 +140,20 @@ jobs:
 
       - name: Set continue-on-error for schedule/full runs
         id: set-continue-on-error
-        env:
-          BYPASS_FASTFAIL_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'bypass-fastfail') }}
         run: |
-          # `bypass-fastfail` label opts the PR into the same "run all tests"
-          # behavior as scheduled runs: the stage-A→B→C wait jobs already
-          # short-circuit (see actions/wait-for-jobs), and we also flip
-          # within-suite continue-on-error here so a single failing test file
-          # in stage B does not stop the rest of that suite.
+          # AMD PR CI policy: every pull_request-triggered run gets
+          # --continue-on-error so a single failing test file inside a suite
+          # does not stop the remaining files in that suite. Combined with
+          # `continue-on-error: true` on the wait-for-stage-{a,b}-amd steps
+          # below, this also lets stage C dispatch even when stage A/B has
+          # failures. The workflow still goes red on any real test failure
+          # via pr-test-amd-finish, which checks each test job's result
+          # directly (the wait jobs are not the ones reporting failure).
           if [[ "${{ steps.run-mode.outputs.run_all_tests }}" == "true" \
              || "${{ inputs.continue_on_error }}" == "true" \
-             || "$BYPASS_FASTFAIL_LABEL" == "true" ]]; then
+             || "${{ github.event_name }}" == "pull_request" ]]; then
             echo "continue_on_error=true" >> $GITHUB_OUTPUT
-            echo "Continue-on-error: ENABLED (run_all_tests=${{ steps.run-mode.outputs.run_all_tests }}, input=${{ inputs.continue_on_error }}, bypass-fastfail=$BYPASS_FASTFAIL_LABEL)"
+            echo "Continue-on-error: ENABLED (event=${{ github.event_name }}, run_all_tests=${{ steps.run-mode.outputs.run_all_tests }}, input=${{ inputs.continue_on_error }})"
           else
             echo "continue_on_error=false" >> $GITHUB_OUTPUT
             echo "Continue-on-error: DISABLED"
@@ -392,6 +393,13 @@ jobs:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/wait-for-jobs
         id: wait
+        # AMD PR CI policy: stage-A failures must not block stage B. The
+        # wait-for-jobs action calls core.setFailed() on the first watched
+        # job's failure; step-level continue-on-error demotes that to a
+        # success at the job level, so this wait job's `result` in the
+        # `needs` graph stays `success` and stage B's `!failure()` gate
+        # evaluates true.
+        continue-on-error: true
         with:
           stage-name: stage-a-amd
           jobs: '[{"prefix": "stage-a-test-1-gpu-small-amd", "expected_count": 1}]'
@@ -888,6 +896,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/wait-for-jobs
         id: wait
+        # AMD PR CI policy: stage-B failures must not block stage C. See the
+        # comment on wait-for-stage-a-amd above for the mechanism.
+        continue-on-error: true
         with:
           stage-name: stage-b-amd
           jobs: |
